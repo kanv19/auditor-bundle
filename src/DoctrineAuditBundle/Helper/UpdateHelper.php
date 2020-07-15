@@ -3,13 +3,17 @@
 namespace DH\DoctrineAuditBundle\Helper;
 
 use DH\DoctrineAuditBundle\AuditConfiguration;
-use DH\DoctrineAuditBundle\Exception\UpdateException;
 use DH\DoctrineAuditBundle\Manager\AuditManager;
 use DH\DoctrineAuditBundle\Reader\AuditReader;
-use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Schema\Schema;
+use Doctrine\DBAL\Schema\SchemaException;
 use Doctrine\DBAL\Schema\Table;
+use Doctrine\ORM\ORMException;
 use Exception;
+use function array_key_exists;
+use function count;
+use function in_array;
 
 class UpdateHelper
 {
@@ -42,8 +46,11 @@ class UpdateHelper
     }
 
     /**
-     * @param null|array    $sqls     SQL queries to execute
+     * @param null|array $sqls SQL queries to execute
      * @param null|callable $callback Callback executed after each query is run
+     * @throws DBALException
+     * @throws ORMException
+     * @throws SchemaException
      */
     public function updateAuditSchema(?array $sqls = null, ?callable $callback = null): void
     {
@@ -60,7 +67,7 @@ class UpdateHelper
 
                 if (null !== $callback) {
                     $callback([
-                        'total' => \count($sqls),
+                        'total' => count($sqls),
                         'current' => $index,
                     ]);
                 }
@@ -70,6 +77,12 @@ class UpdateHelper
         }
     }
 
+    /**
+     * @return array
+     * @throws DBALException
+     * @throws SchemaException
+     * @throws ORMException
+     */
     public function getUpdateAuditSchemaSql(): array
     {
         $readerEntityManager = $this->reader->getEntityManager();
@@ -85,12 +98,12 @@ class UpdateHelper
 
         $entities = $this->reader->getEntities();
         foreach ($tables as $table) {
-            if (\in_array($table->getName(), array_values($entities), true)) {
+            if (in_array($table->getName(), array_values($entities), true)) {
                 $auditTablename = preg_replace(
                     sprintf('#^([^\.]+\.)?(%s)$#', preg_quote($table->getName(), '#')),
                     sprintf(
                         '$1%s$2%s',
-                        preg_quote($this->manager->getConfiguration()->getTablePrefix(), '#'),
+                        $this->manager->getConfiguration()->getTablePrefix(),
                         preg_quote($this->manager->getConfiguration()->getTableSuffix(), '#')
                     ),
                     $table->getName()
@@ -112,9 +125,6 @@ class UpdateHelper
      *
      * @param Table       $table
      * @param null|Schema $schema
-     *
-     * @throws \Doctrine\DBAL\DBALException
-     *
      * @return Schema
      */
     public function createAuditTable(Table $table, ?Schema $schema = null): Schema
@@ -129,7 +139,7 @@ class UpdateHelper
             sprintf('#^([^\.]+\.)?(%s)$#', preg_quote($table->getName(), '#')),
             sprintf(
                 '$1%s$2%s',
-                preg_quote($this->getConfiguration()->getTablePrefix(), '#'),
+                $this->getConfiguration()->getTablePrefix(),
                 preg_quote($this->getConfiguration()->getTableSuffix(), '#')
             ),
             $table->getName()
@@ -162,8 +172,7 @@ class UpdateHelper
      * @param Table       $table
      * @param null|Schema $schema
      *
-     * @throws UpdateException
-     * @throws \Doctrine\DBAL\Schema\SchemaException
+     * @throws SchemaException
      *
      * @return Schema
      */
@@ -200,7 +209,7 @@ class UpdateHelper
         $processed = [];
 
         foreach ($columns as $column) {
-            if (\array_key_exists($column->getName(), $expectedColumns)) {
+            if (array_key_exists($column->getName(), $expectedColumns)) {
                 // column is part of expected columns
                 $table->dropColumn($column->getName());
                 $table->addColumn($column->getName(), $expectedColumns[$column->getName()]['type'], $expectedColumns[$column->getName()]['options']);
@@ -213,7 +222,7 @@ class UpdateHelper
         }
 
         foreach ($expectedColumns as $columnName => $options) {
-            if (!\in_array($columnName, $processed, true)) {
+            if (!in_array($columnName, $processed, true)) {
                 // expected column in not part of concrete ones so it's a new column, we need to add it
                 $table->addColumn($columnName, $options['type'], $options['options']);
             }
@@ -224,7 +233,7 @@ class UpdateHelper
      * @param Table $table
      * @param array $expectedIndices
      *
-     * @throws \Doctrine\DBAL\Schema\SchemaException
+     * @throws SchemaException
      */
     private function processIndices(Table $table, array $expectedIndices): void
     {

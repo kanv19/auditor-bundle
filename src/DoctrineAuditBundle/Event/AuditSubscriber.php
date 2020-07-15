@@ -3,6 +3,7 @@
 namespace DH\DoctrineAuditBundle\Event;
 
 use DH\DoctrineAuditBundle\Manager\AuditManager;
+use Doctrine\DBAL\DBALException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class AuditSubscriber implements EventSubscriberInterface
@@ -27,7 +28,7 @@ class AuditSubscriber implements EventSubscriberInterface
     /**
      * @param LifecycleEvent $event
      *
-     * @throws \Doctrine\DBAL\DBALException
+     * @throws DBALException
      *
      * @return LifecycleEvent
      */

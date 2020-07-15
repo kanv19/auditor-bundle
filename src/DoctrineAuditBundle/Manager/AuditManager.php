@@ -8,9 +8,13 @@ use DH\DoctrineAuditBundle\AuditConfiguration;
 use DH\DoctrineAuditBundle\Event\LifecycleEvent;
 use DH\DoctrineAuditBundle\Helper\AuditHelper;
 use DH\DoctrineAuditBundle\Helper\DoctrineHelper;
+use DH\DoctrineAuditBundle\Helper\UuidHelper;
+use Doctrine\DBAL\DBALException;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
+use Doctrine\ORM\Mapping\MappingException;
 use Exception;
+use function count;
 
 class AuditManager
 {
@@ -21,7 +25,7 @@ class AuditManager
     public const OPERATION_TYPE_DISSOCIATE = 'dissociate';
 
     /**
-     * @var \DH\DoctrineAuditBundle\AuditConfiguration
+     * @var AuditConfiguration
      */
     private $configuration;
 
@@ -37,7 +41,7 @@ class AuditManager
     }
 
     /**
-     * @return \DH\DoctrineAuditBundle\AuditConfiguration
+     * @return AuditConfiguration
      */
     public function getConfiguration(): AuditConfiguration
     {
@@ -53,6 +57,7 @@ class AuditManager
 
         if ($this->configuration->isPre43Dispatcher()) {
             // Symfony 3.x
+            /** @noinspection PhpParamsInspection */
             $dispatcher->dispatch(LifecycleEvent::class, new LifecycleEvent($payload));
         } else {
             // Symfony 4.x
@@ -62,9 +67,8 @@ class AuditManager
 
     /**
      * @param AuditTransaction $transaction
-     *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
      */
     public function process(AuditTransaction $transaction): void
     {
@@ -79,16 +83,16 @@ class AuditManager
      * Adds an insert entry to the audit table.
      *
      * @param EntityManagerInterface $em
-     * @param object                 $entity
-     * @param array                  $ch
-     * @param string                 $transactionHash
+     * @param object $entity
+     * @param array $ch
+     * @param string $transactionHash
      *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
+     * @throws Exception
      */
     public function insert(EntityManagerInterface $em, $entity, array $ch, string $transactionHash): void
     {
-        /** @var ClassMetadata $meta */
         $meta = $em->getClassMetadata(DoctrineHelper::getRealClassName($entity));
         $this->audit([
             'action' => self::OPERATION_TYPE_INSERT,
@@ -107,20 +111,20 @@ class AuditManager
      * Adds an update entry to the audit table.
      *
      * @param EntityManagerInterface $em
-     * @param object                 $entity
-     * @param array                  $ch
-     * @param string                 $transactionHash
+     * @param object $entity
+     * @param array $ch
+     * @param string $transactionHash
      *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
+     * @throws Exception
      */
     public function update(EntityManagerInterface $em, $entity, array $ch, string $transactionHash): void
     {
         $diff = $this->helper->diff($em, $entity, $ch);
-        if (0 === \count($diff)) {
+        if (0 === count($diff)) {
             return; // if there is no entity diff, do not log it
         }
-        /** @var ClassMetadata $meta */
         $meta = $em->getClassMetadata(DoctrineHelper::getRealClassName($entity));
         $this->audit([
             'action' => self::OPERATION_TYPE_UPDATE,
@@ -139,16 +143,16 @@ class AuditManager
      * Adds a remove entry to the audit table.
      *
      * @param EntityManagerInterface $em
-     * @param object                 $entity
-     * @param mixed                  $id
-     * @param string                 $transactionHash
+     * @param object $entity
+     * @param mixed $id
+     * @param string $transactionHash
      *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
+     * @throws Exception
      */
     public function remove(EntityManagerInterface $em, $entity, $id, string $transactionHash): void
     {
-        /** @var ClassMetadata $meta */
         $meta = $em->getClassMetadata(DoctrineHelper::getRealClassName($entity));
         $this->audit([
             'action' => self::OPERATION_TYPE_REMOVE,
@@ -167,13 +171,12 @@ class AuditManager
      * Adds an association entry to the audit table.
      *
      * @param EntityManagerInterface $em
-     * @param object                 $source
-     * @param object                 $target
-     * @param array                  $mapping
-     * @param string                 $transactionHash
-     *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @param object $source
+     * @param object $target
+     * @param array $mapping
+     * @param string $transactionHash
+     * @throws DBALException
+     * @throws MappingException
      */
     public function associate(EntityManagerInterface $em, $source, $target, array $mapping, string $transactionHash): void
     {
@@ -184,13 +187,12 @@ class AuditManager
      * Adds a dissociation entry to the audit table.
      *
      * @param EntityManagerInterface $em
-     * @param object                 $source
-     * @param object                 $target
-     * @param array                  $mapping
-     * @param string                 $transactionHash
-     *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @param object $source
+     * @param object $target
+     * @param array $mapping
+     * @param string $transactionHash
+     * @throws DBALException
+     * @throws MappingException
      */
     public function dissociate(EntityManagerInterface $em, $source, $target, array $mapping, string $transactionHash): void
     {
@@ -219,9 +221,8 @@ class AuditManager
 
     /**
      * @param AuditTransaction $transaction
-     *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
      */
     public function processInsertions(AuditTransaction $transaction): void
     {
@@ -236,9 +237,8 @@ class AuditManager
 
     /**
      * @param AuditTransaction $transaction
-     *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
      */
     public function processUpdates(AuditTransaction $transaction): void
     {
@@ -253,9 +253,8 @@ class AuditManager
 
     /**
      * @param AuditTransaction $transaction
-     *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
      */
     public function processAssociations(AuditTransaction $transaction): void
     {
@@ -267,9 +266,8 @@ class AuditManager
 
     /**
      * @param AuditTransaction $transaction
-     *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
      */
     public function processDissociations(AuditTransaction $transaction): void
     {
@@ -281,9 +279,8 @@ class AuditManager
 
     /**
      * @param AuditTransaction $transaction
-     *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
      */
     public function processDeletions(AuditTransaction $transaction): void
     {
@@ -306,19 +303,19 @@ class AuditManager
     /**
      * Adds an association entry to the audit table.
      *
-     * @param string                 $type
+     * @param string $type
      * @param EntityManagerInterface $em
-     * @param object                 $source
-     * @param object                 $target
-     * @param array                  $mapping
-     * @param string                 $transactionHash
+     * @param object $source
+     * @param object $target
+     * @param array $mapping
+     * @param string $transactionHash
      *
-     * @throws \Doctrine\DBAL\DBALException
-     * @throws \Doctrine\ORM\Mapping\MappingException
+     * @throws DBALException
+     * @throws MappingException
+     * @throws Exception
      */
     private function associateOrDissociate(string $type, EntityManagerInterface $em, $source, $target, array $mapping, string $transactionHash): void
     {
-        /** @var ClassMetadata $meta */
         $meta = $em->getClassMetadata(DoctrineHelper::getRealClassName($source));
         $data = [
             'action' => $type,
@@ -356,12 +353,13 @@ class AuditManager
         $dt = new DateTime('now', new DateTimeZone($this->getConfiguration()->getTimezone()));
 
         $payload = [
+            'id' => UuidHelper::create(),
             'entity' => $data['entity'],
             'table' => $auditTable,
             'type' => $data['action'],
-            'object_id' => (string) $data['id'],
+            'object_id' => (string)$data['id'],
             'discriminator' => $data['discriminator'],
-            'transaction_hash' => (string) $data['transaction_hash'],
+            'transaction_hash' => (string)$data['transaction_hash'],
             'diffs' => json_encode($data['diff']),
             'blame_id' => $data['blame']['user_id'],
             'blame_user' => $data['blame']['username'],
